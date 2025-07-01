@@ -1,0 +1,9 @@
+{
+    "recommendations": [
+        "mehedidracula.php-namespace-resolver",
+        "ms-vscode-remote.remote-containers",
+        "yzhang.markdown-all-in-one",
+        "redhat.vscode-yaml",
+        "aswinkumar863.smarty-template-support"
+    ]
+}
