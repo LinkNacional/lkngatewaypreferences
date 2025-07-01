@@ -1,0 +1,31 @@
+{
+    "name": "whmcs-gateway-preferences",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "mounts": [
+        {
+            "source": "{path-to-your-stubs-folder}",
+            "target": "/home/www-data/whmcs",
+            "type": "bind"
+        }
+    ],
+    "postCreateCommand": "composer install && composer install --working-dir /workspaces/lknhooknotification/src/modules/addons/lknhooknotification --ignore-platform-reqs",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "st-pham.php-refactor-tool", // Support for PHP symbol rename
+                "valeryanm.vscode-phpsab", // PHP Code Sniffer
+                "bmewburn.vscode-intelephense-client", // Intelephense
+                "neilbrayfield.php-docblocker", // PHP Dockblock Generator
+                "MehediDracula.php-namespace-resolver", // PHP namespace generator
+                "ctf0.php-array-symbols", // PHP array symbol support
+                "SanderRonde.phpstan-vscode", // PHP static ana
+                "christian-kohler.path-intellisense",
+                "xdebug.php-debug",
+                "satiromarra.code-sftp",
+                "aswinkumar863.smarty-template-support"
+            ]
+        }
+    }
+}

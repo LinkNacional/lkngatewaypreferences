@@ -1,0 +1,32 @@
+{
+    "schema": "1.0.0",
+    "type": "whmcs-addons",
+    "name": "lkngatewaypreferences",
+    "license": "proprietary",
+    "category": "utilities",
+    "description": {
+        "name": "Gateway Preferences",
+        "tagline": "Define which gateways can be used per country, per client and globally.",
+        "long": "Choose which gateways can be used by your clients according to their country or by a specific preference for each client.",
+        "characteristics": [
+            "Set allowed gateways globally, for all countries",
+            "Set allowed gateways by country",
+            "Set allowed gateways per client",
+            "Automatic display or not of gateways on invoice and checkout",
+            "Automatic verification and switching to gateway allowed to client when creating invoice"
+        ]
+    },
+    "logo": {
+        "filename": "logo.png"
+    },
+    "support": {
+        "homepage": "https://www.linknacional.com.br/",
+        "email": "ticket@linknacional.com.br"
+    },
+    "authors": [
+        {
+            "name": "Link Nacional",
+            "homepage": "https://www.linknacional.com.br/"
+        }
+    ]
+}
