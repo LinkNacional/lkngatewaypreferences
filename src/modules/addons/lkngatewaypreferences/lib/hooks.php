@@ -350,53 +350,66 @@ add_hook('AfterCronJob', 1, function ($vars): void {
             }
         }
     }
+});
 
-    // Process automatic cancellation of fraud orders
-    if (Config::setting('enable_auto_cancel')) {
+add_hook('DailyCronJob', 1, function ($vars): void {
+    if (lkngatewaypreferencescheck_license() !== true) {
+        return;
+    }
+
+    // Só executa se o recurso de auto-cancel estiver ativado nas configurações do módulo
+    if (!Config::setting('enable_auto_cancel')) {
+        return;
+    }
+
+    if (Config::setting('enable_log')) {
+        Logger::log('[DailyCronJob Hook] Iniciando verificação de cancelamento automático para TODOS os pedidos Pendentes');
+    }
+
+    $skipZeroAmount = Config::setting('skip_zero_amount');
+
+    // Busca TODOS os pedidos com status puramente 'Pending' no WHMCS (Ignora os 'Fraud')
+    $query = Capsule::table('tblorders')
+        ->where('status', 'Pending');
+    
+    // Respeita a configuração de ignorar pedidos com valor zero
+    if ($skipZeroAmount) {
+        $query->where('amount', '>', 0);
+    }
+    
+    $pendingOrders = $query->get([
+        'id', 'userid', 'status', 'date', 'total', 'amount', 'paymentmethod'
+    ]);
+
+    if (count($pendingOrders) === 0) {
         if (Config::setting('enable_log')) {
-            Logger::log('[AfterCronJob Hook] Processando cancelamento automático de pedidos');
+            Logger::log('[DailyCronJob Hook] Nenhum pedido pendente encontrado para cancelamento.');
         }
+        return;
+    }
 
-        // Get all fraud orders tracked by the module (both Fraud and Pending status)
-        $ordersToCheck = Capsule::table('mod_lkngatewaypreferences_fraud_orders')
-            ->whereIn('status', ['Fraud', 'Pending'])
-            ->get(['order_id']);
-
-        foreach ($ordersToCheck as $trackedOrder) {
-            // Get order details from WHMCS
-            $orderData = Capsule::table('tblorders')
-                ->where('id', $trackedOrder->order_id)
-                ->first([
-                    'id', 'userid', 'status', 'date', 'total', 'amount', 'paymentmethod'
+    foreach ($pendingOrders as $orderData) {
+        // A classe AutoCancel::shouldCancel usa a inteligência do seu módulo para checar
+        // os dias configurados e se o pedido tem faturas pagas de acordo com a sua configuração
+        if (AutoCancel::shouldCancel($orderData->id, (array) $orderData)) {
+            
+            if (Config::setting('enable_log')) {
+                Logger::log('[AutoCancel Geral] Cancelando pedido pendente', [
+                    'orderId' => $orderData->id,
+                    'orderStatus' => $orderData->status,
+                    'daysOld' => (new \DateTime())->diff(new \DateTime($orderData->date))->days
                 ]);
-
-            if (!$orderData) {
-                continue;
             }
 
-            // Check if order should be canceled
-            if (AutoCancel::shouldCancel($trackedOrder->order_id, (array) $orderData)) {
+            // Cancela o pedido via API oficial do WHMCS de forma segura
+            $cancelResult = AutoCancel::cancelOrder($orderData->id);
+
+            if ($cancelResult['result'] !== 'success') {
                 if (Config::setting('enable_log')) {
-                    Logger::log('[AutoCancel] Cancelando pedido', [
-                        'orderId' => $trackedOrder->order_id,
-                        'orderStatus' => $orderData->status,
-                        'daysOld' => (new \DateTime())->diff(new \DateTime($orderData->date))->days
+                    Logger::log('[AutoCancel Geral] Erro ao cancelar pedido', [
+                        'orderId' => $orderData->id,
+                        'error' => $cancelResult['message'] ?? 'Erro desconhecido'
                     ]);
-                }
-
-                // Cancel the order via API
-                $cancelResult = AutoCancel::cancelOrder($trackedOrder->order_id);
-
-                if ($cancelResult['result'] === 'success') {
-                    // Update fraud order status
-                    AutoCancel::updateFraudOrderStatus($trackedOrder->order_id);
-                } else {
-                    if (Config::setting('enable_log')) {
-                        Logger::log('[AutoCancel] Erro ao cancelar pedido', [
-                            'orderId' => $trackedOrder->order_id,
-                            'error' => $cancelResult['message'] ?? 'Erro desconhecido'
-                        ]);
-                    }
                 }
             }
         }
