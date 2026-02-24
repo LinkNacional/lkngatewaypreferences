@@ -39,6 +39,23 @@ final class GeneralSettingsController extends AbstractController
             $lknLicense = strip_tags($_POST['lkn-license']);
             $this->repository->storeOrUpdate('lkn_license', $lknLicense);
 
+            $fraudCronHook = strip_tags($_POST['fraud-cron-hook']);
+            $this->repository->storeOrUpdate('fraud_cron_hook', $fraudCronHook);
+
+            $skipZeroAmount = strip_tags($_POST['skip-zero-amount'] ?? '');
+            $this->repository->storeOrUpdate('skip_zero_amount', $skipZeroAmount);
+
+            $enableAutoCancel = strip_tags($_POST['enable-auto-cancel'] ?? '');
+            $this->repository->storeOrUpdate('enable_auto_cancel', $enableAutoCancel);
+
+            $autoCancelDays = strip_tags($_POST['auto-cancel-days'] ?? '0');
+            $autoCancelDays = (int) $autoCancelDays;
+            $autoCancelDays = $autoCancelDays > 0 ? $autoCancelDays : 0;
+            $this->repository->storeOrUpdate('auto_cancel_days', (string) $autoCancelDays);
+
+            $cancelPaidOrders = strip_tags($_POST['cancel-paid-orders'] ?? '');
+            $this->repository->storeOrUpdate('cancel_paid_orders', $cancelPaidOrders);
+
             $viewParams['settingsSaved'] = true;
         }
 
@@ -46,12 +63,22 @@ final class GeneralSettingsController extends AbstractController
         $enableFraudChange = (bool) $this->repository->getOne('enable_fraudchange') ?? '';
         $enableNotes = (bool) $this->repository->getOne('enable_notes') ?? '';
         $lknLicense = $this->repository->getOne('lkn_license') ?? '';
+        $fraudCronHook = $this->repository->getOne('fraud_cron_hook') ?? 'AfterCronJob';
+        $skipZeroAmount = (bool) $this->repository->getOne('skip_zero_amount') ?? '';
+        $enableAutoCancel = (bool) $this->repository->getOne('enable_auto_cancel') ?? '';
+        $autoCancelDays = (int) $this->repository->getOne('auto_cancel_days') ?? 0;
+        $cancelPaidOrders = (bool) $this->repository->getOne('cancel_paid_orders') ?? '';
 
         $viewParams = array_merge($viewParams, [
             'enable_log' => $enableLog,
             'enable_fraudchange' => $enableFraudChange,
             'enable_notes' => $enableNotes,
-            'lkn_license' => $lknLicense
+            'lkn_license' => $lknLicense,
+            'fraud_cron_hook' => $fraudCronHook,
+            'skip_zero_amount' => $skipZeroAmount,
+            'enable_auto_cancel' => $enableAutoCancel,
+            'auto_cancel_days' => $autoCancelDays,
+            'cancel_paid_orders' => $cancelPaidOrders
         ]);
 
         return View::render('views.admin.pages.settings', $viewParams);

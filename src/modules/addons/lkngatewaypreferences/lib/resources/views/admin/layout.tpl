@@ -72,6 +72,10 @@
                     <li {($page=="pref.byFraud") ? "class='active'" : ''}>
                         <a href="?module=lkngatewaypreferences&c=by-fraud&r=create">{$lang['Preferences by fraud']}</a>
                     </li>
+                    <li {($page=="diagnostic") ? "class='active'" : ''}>
+                        <a href="?module=lkngatewaypreferences&c=diagnostic"
+                            style="color: #F4912E; font-weight: bold;">Diagnostic</a>
+                    </li>
                 </ul>
 
                 <p class="navbar-text navbar-right">v{$moduleVersion}</p>

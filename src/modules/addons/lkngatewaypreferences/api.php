@@ -15,6 +15,7 @@ use WHMCS\Module\Addon\lkngatewaypreferences\App\Preferences\Controllers\PrefByC
 use WHMCS\Module\Addon\lkngatewaypreferences\App\Preferences\Controllers\PrefByCountryController;
 use WHMCS\Module\Addon\lkngatewaypreferences\App\Preferences\Controllers\PrefByFraudController;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\Client;
+use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\Diagnostic;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\License;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\VersionUpgrade;
 
@@ -123,6 +124,21 @@ switch ($request['a']) {
 
     case 'new-version-dismiss-on-admin-home':
         VersionUpgrade::setDismissOnAdminHome(true);
+        break;
+
+    case 'diagnostic-module-status':
+        header('Content-Type: application/json');
+        echo json_encode(Diagnostic::checkModuleStatus());
+        break;
+
+    case 'diagnostic-fraud-orders':
+        header('Content-Type: application/json');
+        echo json_encode(Diagnostic::getFraudOrdersDetail());
+        break;
+
+    case 'diagnostic-test-cron':
+        header('Content-Type: application/json');
+        echo json_encode(Diagnostic::testCronHook());
         break;
 
     default:

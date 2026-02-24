@@ -56,12 +56,15 @@ final class Config
      */
     final public static function setting(string $name): mixed
     {
-        $setting = Capsule::table('mod_lkngatewaypreferences_settings')
+        $settingRow = Capsule::table('mod_lkngatewaypreferences_settings')
             ->where('setting', $name)
-            ->first('value')
-            ->value;
+            ->first(['value']);
 
-        return self::parseConfig($name, $setting);
+        if (!$settingRow) {
+            return null;
+        }
+
+        return self::parseConfig($name, $settingRow->value);
     }
 
     /**
@@ -79,6 +82,7 @@ final class Config
             'enable_fraudchange' => $value === 'on',
             'enable_notes' => $value === 'on',
             'order_fraud_gateway' => json_decode($value, true),
+            'fraud_cron_hook' => trim($value) ?: 'AfterCronJob',
             default => trim($value)
         };
     }
