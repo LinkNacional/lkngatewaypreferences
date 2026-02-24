@@ -9,6 +9,7 @@ use WHMCS\Module\Addon\lkngatewaypreferences\Database\SetupTables;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\Config;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\Lang;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\Logger;
+use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\View;
 
 if (!defined('WHMCS')) {
     die('This file cannot be accessed directly');
@@ -105,6 +106,14 @@ function lkngatewaypreferences_output($vars): void
 {
     $controller = isset($_REQUEST['c']) ? strip_tags($_REQUEST['c']) : 'general';
     $method = isset($_REQUEST['r']) ? strip_tags($_REQUEST['r']) : 'create';
+
+    // Special handling for diagnostic page
+    if ($controller === 'diagnostic') {
+        echo View::render('views.admin.pages.diagnostic', [
+            'lang' => Lang::getModuleLang(),
+        ]);
+        return;
+    }
 
     $controllerInstance = match ($controller) {
         'by-country' => new PrefByCountryController(),
