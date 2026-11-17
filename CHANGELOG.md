@@ -1,3 +1,9 @@
+# 1.7.0 17/11/26
+- Endpoint público `public.php` (ação `gateways-by-country`) para o checkout consultar os gateways permitidos por país, com fallback global, same-origin e rate limit
+- Hook `ShoppingCartValidateCheckout` validando o gateway postado contra a lista permitida (prioridade cliente > país > global)
+- Traduções da mensagem de erro em en, pt-BR e pt-PT
+- Documentação do endpoint e da limitação de CSRF no README
+
 # 1.6.2 01/07/24
 - Remoção de funções de licença.
 

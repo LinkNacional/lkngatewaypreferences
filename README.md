@@ -38,3 +38,41 @@ This module integrates deeply with WHMCS using the following native hooks:
 
 ---
 *Developed and maintained for seamless WHMCS automation.*
+
+## Endpoint público: gateways por país
+
+O checkout do tema pode consultar quais gateways estão permitidos para um país,
+inclusive para visitantes (sem cliente logado).
+
+- **Arquivo:** `modules/addons/lkngatewaypreferences/public.php`
+- **Ação:** `gateways-by-country`
+- **Método:** `POST` com JSON (requisição same-origin)
+- **Corpo:** `{"a":"gateways-by-country","country":"BR"}`
+- **Resposta de sucesso:**
+  ```json
+  {"success":true,"data":{"gateways":["paghiper","lknbbpix","lknc_cielo_credit_card_token","lkncielo3ds"]}}
+  ```
+- **Fallback:** país sem preferência → preferência global (`**`)
+- **Erros:**
+  - `400 {"success":false,"error":"invalid_action"}`
+  - `400 {"success":false,"error":"invalid_country"}`
+  - `403 {"success":false,"error":"forbidden"}` (requisição não same-origin)
+  - `429 {"success":false,"error":"rate_limited"}` (30 req/min por IP)
+  - `500 {"success":false,"error":"unavailable"}`
+
+A lista usa `PrefByCountryRepository::getOne()` e `getGlobalPref()` — a mesma
+fonte usada pelo painel de preferências, sem regra duplicada.
+
+### Validação no servidor
+
+O hook `ShoppingCartValidateCheckout` bloqueia o checkout quando o
+`paymentmethod` postado não está na lista permitida para o pedido, seguindo a
+prioridade do módulo: **preferência do cliente → preferência do país →
+preferência global**. A mensagem de erro é traduzida (en, pt-BR, pt-PT).
+
+### Limitação conhecida de CSRF
+
+Esta instalação do WHMCS não expõe um helper de validação de token para
+endpoints de addon, então a proteção é **same-origin** (`Origin`/`Referer`/
+`Sec-Fetch-Site`) somada ao rate limit. O endpoint é somente leitura e devolve
+apenas códigos de gateway.
