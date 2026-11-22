@@ -132,3 +132,4 @@ $_ADDONLANG['auto_cancel_days_placeholder'] = 'Digite o número de dias (ex: 7)'
 $_ADDONLANG['cancel_paid_orders_title'] = 'Cancelar Pedidos Pagos';
 $_ADDONLANG['cancel_paid_orders_subtitle'] = 'Cancelar pedidos Pendente mesmo que o pagamento tenha sido confirmado';
 $_ADDONLANG['cancel_paid_orders_option'] = 'Cancelar pedidos com status de pagamento confirmado';
+$_ADDONLANG['Payment method unavailable for the selected country.'] = 'Forma de pagamento indisponível para o país selecionado.';
