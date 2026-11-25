@@ -1,3 +1,8 @@
+# 1.7.2 25/11/26
+- Corrige HTTP 500 em `viewinvoice.php` para clientes sem linha em `mod_lkngatewaypreferences_by_client`: `first('gateways')` retorna null e o encadeamento `->gateways` estourava `Attempt to read property "gateways" on null` (`PrefByClientRepository::getOne`, linha 27)
+- Mesma guarda aplicada em `PrefByCountryRepository::getOne` e `getGlobalPref` (falha idêntica quando não existe registro do país/global)
+- Sem mudança de semântica: ausência de preferência continua caindo para país -> global; o retorno vazio já era o esperado pela linha seguinte
+
 # 1.7.1 24/11/26
 - Fraude: `UpdateClient`/`UpdateInvoice` apenas quando o gateway realmente difere (elimina webhook `ClientEdit` sem mudança)
 - Fraude: limite de 25 mudanças de status por execução (não bloqueia o checkout)

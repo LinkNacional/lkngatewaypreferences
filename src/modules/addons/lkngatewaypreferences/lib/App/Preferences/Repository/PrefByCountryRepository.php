@@ -13,7 +13,7 @@ final class PrefByCountryRepository extends AbstractRepository
         $gateways = $this->query()
             ->where('country', $countryCode)
             ->first('gateways')
-            ->gateways;
+            ?->gateways;
 
         return $gateways ? $this->jsonDecode($gateways) : [];
     }
@@ -38,7 +38,7 @@ final class PrefByCountryRepository extends AbstractRepository
 
     public function getGlobalPref(): array
     {
-        $gateways = $this->query()->where('country', '**')->first('gateways')->gateways;
+        $gateways = $this->query()->where('country', '**')->first('gateways')?->gateways;
 
         return $gateways ? $this->jsonDecode($gateways) : [];
     }
