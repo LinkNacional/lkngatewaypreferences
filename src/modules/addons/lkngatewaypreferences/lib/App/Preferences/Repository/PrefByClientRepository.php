@@ -24,7 +24,7 @@ final class PrefByClientRepository extends AbstractRepository
         $gateways = $this->query()
             ->where('client_id', $clientId)
             ->first('gateways')
-            ->gateways;
+            ?->gateways;
 
         return $gateways ? $this->jsonDecode($gateways) : [];
     }
