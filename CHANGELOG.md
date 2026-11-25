@@ -2,6 +2,10 @@
 - Fraude: `UpdateClient`/`UpdateInvoice` apenas quando o gateway realmente difere (elimina webhook `ClientEdit` sem mudança)
 - Fraude: limite de 25 mudanças de status por execução (não bloqueia o checkout)
 - Fraude: lógica unificada em `lknGwProcessFraudOrders()` para `AfterCronJob` e `AfterFraudCheck`
+- Mesmo fix publicado como 1.6.3 na linha 1.6.x (hotfix de produção)
+
+# 1.6.3 24/11/26
+- Hotfix na linha 1.6.x do fix acima (produção em 1.6.2)
 
 # 1.7.0 17/11/26
 - Endpoint público `public.php` (ação `gateways-by-country`) para o checkout consultar os gateways permitidos por país, com fallback global, same-origin e rate limit
