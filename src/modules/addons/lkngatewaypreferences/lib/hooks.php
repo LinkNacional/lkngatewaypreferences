@@ -240,188 +240,153 @@ add_hook('FraudOrder', 1, function ($vars): void {
 });
 
 
+if (!function_exists('lknGwProcessFraudOrders')) {
+    /**
+     * Processa pedidos com status Fraud (gateway preferido + status Pending).
+     *
+     * Caminho unico usado por AfterCronJob e AfterFraudCheck.
+     *
+     * Ajustes 2026-11-24 (latencia de checkout ~90s):
+     *  - UpdateClient/UpdateInvoice so quando o gateway realmente difere;
+     *  - limite de 25 mudancas de status por execucao, para nao travar o checkout.
+     */
+    function lknGwProcessFraudOrders(): void
+    {
+        if (lkngatewaypreferencescheck_license() === false) {
+            return;
+        }
+
+        $enableFraudChange = Config::setting('enable_fraudchange');
+        $enableFraudGateways = Config::setting('enable_fraud_gateways');
+
+        if (!$enableFraudChange && !$enableFraudGateways) {
+            return;
+        }
+
+        $lang = Lang::getModuleLang();
+        $skipZeroAmount = Config::setting('skip_zero_amount');
+        $batchLimit = 25;
+
+        $query = Capsule::table('tblorders')->where('status', 'Fraud');
+        if ($skipZeroAmount) {
+            $query->where('amount', '>', 0);
+        }
+
+        $fraudOrders = $query->get(['id', 'userid', 'amount', 'invoiceid']);
+
+        if (count($fraudOrders) === 0) {
+            return;
+        }
+
+        $statusChanges = 0;
+
+        foreach ($fraudOrders as $fraudOrder) {
+            $orderId = (int) $fraudOrder->id;
+            $clientId = (int) $fraudOrder->userid;
+            $invoiceId = (int) $fraudOrder->invoiceid;
+
+            // 1. Atualizacao de gateways (grava apenas se mudou)
+            if ($enableFraudGateways) {
+                $gatewaysForFraudOrder = Config::setting('order_fraud_gateway') ?? [];
+                $newGateway = $gatewaysForFraudOrder[0] ?? null;
+
+                $fraudCountryRow = Capsule::table('mod_lkngatewaypreferences_for_fraud')
+                    ->where('country', 'LIKE', Client::getCountry($clientId))
+                    ->first('gateways');
+
+                if ($fraudCountryRow) {
+                    $countryGateways = json_decode($fraudCountryRow->gateways, true);
+                    if (!empty($countryGateways)) {
+                        $gatewaysForFraudOrder = $countryGateways;
+                        $newGateway = $countryGateways[0] ?? null;
+                    }
+                }
+
+                if ($newGateway) {
+                    PreferencesService::updateAllowed($clientId, $gatewaysForFraudOrder);
+
+                    $currentClientGateway = Capsule::table('tblclients')
+                        ->where('id', $clientId)
+                        ->value('defaultgateway');
+
+                    if ((string) $currentClientGateway !== (string) $newGateway) {
+                        localAPI('UpdateClient', [
+                            'clientid' => $clientId,
+                            'paymentmethod' => $newGateway
+                        ]);
+                    }
+
+                    if ($invoiceId > 0) {
+                        $currentInvoiceGateway = Capsule::table('tblinvoices')
+                            ->where('id', $invoiceId)
+                            ->value('paymentmethod');
+
+                        if ((string) $currentInvoiceGateway !== (string) $newGateway) {
+                            localAPI('UpdateInvoice', [
+                                'invoiceid' => $invoiceId,
+                                'paymentmethod' => $newGateway
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            // 2. Mudanca de status
+            if ($enableFraudChange) {
+                $trackedOrder = Capsule::table('mod_lkngatewaypreferences_fraud_orders')
+                    ->where('order_id', $orderId)
+                    ->first();
+
+                if ($trackedOrder && $trackedOrder->status === 'Pending') {
+                    continue;
+                }
+
+                if ($statusChanges >= $batchLimit) {
+                    break;
+                }
+
+                if (!$trackedOrder) {
+                    Capsule::table('mod_lkngatewaypreferences_fraud_orders')->insert([
+                        'order_id' => $orderId,
+                        'status' => 'Fraud'
+                    ]);
+                }
+
+                $res = localAPI('PendingOrder', ['orderid' => $orderId]);
+
+                if ($res['result'] === 'success') {
+                    Capsule::table('mod_lkngatewaypreferences_fraud_orders')
+                        ->where('order_id', $orderId)
+                        ->update(['status' => 'Pending']);
+
+                    $statusChanges++;
+
+                    if (Config::setting('enable_notes')) {
+                        localAPI('AddClientNote', [
+                            'userid' => $clientId,
+                            'notes' => $lang['log_order_num'] . $orderId . $lang['log_altered_order_note'],
+                            'sticky' => true,
+                        ]);
+                    }
+                }
+            }
+        }
+    }
+}
+
 add_hook('AfterCronJob', 1, function ($vars): void {
     $fraudCronHook = Config::setting('fraud_cron_hook') ?? 'AfterCronJob';
     if ($fraudCronHook !== 'AfterCronJob') return;
-    if (lkngatewaypreferencescheck_license() === false) return;
 
-    $enableFraudChange = Config::setting('enable_fraudchange');
-    $enableFraudGateways = Config::setting('enable_fraud_gateways');
-
-    // Se ambas as opções estiverem desmarcadas no painel, economiza recursos
-    if (!$enableFraudChange && !$enableFraudGateways) return;
-
-    $lang = Lang::getModuleLang();
-    $skipZeroAmount = Config::setting('skip_zero_amount');
-
-    $query = Capsule::table('tblorders')->where('status', 'Fraud');
-    if ($skipZeroAmount) {
-        $query->where('amount', '>', 0);
-    }
-    
-    // Assegura que invoiceid seja retornado da query
-    $fraudOrders = $query->get(['id', 'userid', 'amount', 'invoiceid']);
-    
-    if (count($fraudOrders) === 0) return;
-
-    foreach ($fraudOrders as $fraudOrder) {
-        $orderId = $fraudOrder->id;
-        $clientId = $fraudOrder->userid;
-        $invoiceId = $fraudOrder->invoiceid;
-
-        // 1. Atualização de Gateways
-        if ($enableFraudGateways) {
-            $gatewaysForFraudOrder = Config::setting('order_fraud_gateway') ?? [];
-            $newGateway = $gatewaysForFraudOrder[0] ?? null;
-
-            $fraudCountryRow = Capsule::table('mod_lkngatewaypreferences_for_fraud')
-                ->where('country', 'LIKE', Client::getCountry($clientId))
-                ->first('gateways');
-
-            if ($fraudCountryRow) {
-                $countryGateways = json_decode($fraudCountryRow->gateways, true);
-                if (!empty($countryGateways)) {
-                    $gatewaysForFraudOrder = $countryGateways;
-                    $newGateway = $countryGateways[0] ?? null;
-                }
-            }
-
-            if ($newGateway) {
-                PreferencesService::updateAllowed($clientId, $gatewaysForFraudOrder);
-                localAPI('UpdateClient', ['clientid' => $clientId, 'paymentmethod' => $newGateway]);
-                
-                if (!empty($invoiceId) && $invoiceId > 0) {
-                    localAPI('UpdateInvoice', ['invoiceid' => $invoiceId, 'paymentmethod' => $newGateway]);
-                }
-            }
-        }
-
-        // 2. Mudança de Status
-        if ($enableFraudChange) {
-            $trackedOrder = Capsule::table('mod_lkngatewaypreferences_fraud_orders')
-                ->where('order_id', $orderId)
-                ->first();
-
-            // Pula status change se já processamos antes
-            if ($trackedOrder && $trackedOrder->status === 'Pending') {
-                continue;
-            }
-
-            if (!$trackedOrder) {
-                Capsule::table('mod_lkngatewaypreferences_fraud_orders')->insert([
-                    'order_id' => $orderId,
-                    'status' => 'Fraud'
-                ]);
-            }
-
-            $res = localAPI('PendingOrder', ['orderid' => $orderId]);
-
-            if ($res['result'] === 'success') {
-                Capsule::table('mod_lkngatewaypreferences_fraud_orders')
-                    ->where('order_id', $orderId)
-                    ->update(['status' => 'Pending']);
-
-                if (Config::setting('enable_notes')) {
-                    localAPI('AddClientNote', [
-                        'userid' => $clientId,
-                        'notes' => $lang['log_order_num'] . $orderId . $lang['log_altered_order_note'],
-                        'sticky' => true,
-                    ]);
-                }
-            }
-        }
-    }
+    lknGwProcessFraudOrders();
 });
 
 
 add_hook('AfterFraudCheck', 1, function ($vars): void {
     $fraudCronHook = Config::setting('fraud_cron_hook') ?? 'AfterCronJob';
     if ($fraudCronHook !== 'AfterFraudCheck') return;
-    if (lkngatewaypreferencescheck_license() === false) return;
 
-    $enableFraudChange = Config::setting('enable_fraudchange');
-    $enableFraudGateways = Config::setting('enable_fraud_gateways');
-
-    if (!$enableFraudChange && !$enableFraudGateways) return;
-
-    $lang = Lang::getModuleLang();
-    $skipZeroAmount = Config::setting('skip_zero_amount');
-
-    $query = Capsule::table('tblorders')->where('status', 'Fraud');
-    if ($skipZeroAmount) {
-        $query->where('amount', '>', 0);
-    }
-    
-    $fraudOrders = $query->get(['id', 'userid', 'amount', 'invoiceid']);
-    
-    if (count($fraudOrders) === 0) return;
-
-    foreach ($fraudOrders as $fraudOrder) {
-        $orderId = $fraudOrder->id;
-        $clientId = $fraudOrder->userid;
-        $invoiceId = $fraudOrder->invoiceid;
-
-        // 1. Atualização de Gateways
-        if ($enableFraudGateways) {
-            $gatewaysForFraudOrder = Config::setting('order_fraud_gateway') ?? [];
-            $newGateway = $gatewaysForFraudOrder[0] ?? null;
-
-            $fraudCountryRow = Capsule::table('mod_lkngatewaypreferences_for_fraud')
-                ->where('country', 'LIKE', Client::getCountry($clientId))
-                ->first('gateways');
-
-            if ($fraudCountryRow) {
-                $countryGateways = json_decode($fraudCountryRow->gateways, true);
-                if (!empty($countryGateways)) {
-                    $gatewaysForFraudOrder = $countryGateways;
-                    $newGateway = $countryGateways[0] ?? null;
-                }
-            }
-
-            if ($newGateway) {
-                PreferencesService::updateAllowed($clientId, $gatewaysForFraudOrder);
-                localAPI('UpdateClient', ['clientid' => $clientId, 'paymentmethod' => $newGateway]);
-                
-                if (!empty($invoiceId) && $invoiceId > 0) {
-                    localAPI('UpdateInvoice', ['invoiceid' => $invoiceId, 'paymentmethod' => $newGateway]);
-                }
-            }
-        }
-
-        // 2. Mudança de Status
-        if ($enableFraudChange) {
-            $trackedOrder = Capsule::table('mod_lkngatewaypreferences_fraud_orders')
-                ->where('order_id', $orderId)
-                ->first();
-
-            if ($trackedOrder && $trackedOrder->status === 'Pending') {
-                continue;
-            }
-
-            if (!$trackedOrder) {
-                Capsule::table('mod_lkngatewaypreferences_fraud_orders')->insert([
-                    'order_id' => $orderId,
-                    'status' => 'Fraud'
-                ]);
-            }
-
-            $res = localAPI('PendingOrder', ['orderid' => $orderId]);
-
-            if ($res['result'] === 'success') {
-                Capsule::table('mod_lkngatewaypreferences_fraud_orders')
-                    ->where('order_id', $orderId)
-                    ->update(['status' => 'Pending']);
-
-                if (Config::setting('enable_notes')) {
-                    localAPI('AddClientNote', [
-                        'userid' => $clientId,
-                        'notes' => $lang['log_order_num'] . $orderId . $lang['log_altered_order_note'],
-                        'sticky' => true,
-                    ]);
-                }
-            }
-        }
-    }
+    lknGwProcessFraudOrders();
 });
 
 
