@@ -1,3 +1,8 @@
+# 1.6.3 24/11/26
+- Fraude: `UpdateClient`/`UpdateInvoice` apenas quando o gateway realmente difere (elimina webhook `ClientEdit` sem mudança)
+- Fraude: limite de 25 mudanças de status por execução (não bloqueia o checkout)
+- Fraude: lógica unificada em `lknGwProcessFraudOrders()` para `AfterCronJob` e `AfterFraudCheck`
+
 # 1.6.2 01/07/24
 - Remoção de funções de licença.
 
