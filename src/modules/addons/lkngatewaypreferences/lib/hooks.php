@@ -8,6 +8,7 @@ use WHMCS\Authentication\CurrentUser;
 use WHMCS\Database\Capsule;
 use WHMCS\Module\Addon\lkngatewaypreferences\App\Preferences\Controllers\PrefByClientController;
 use WHMCS\Module\Addon\lkngatewaypreferences\App\Preferences\Services\GetAllowedGatewaysForClientService;
+use WHMCS\Module\Addon\lkngatewaypreferences\App\Preferences\Repository\PrefByCountryRepository;
 use WHMCS\Module\Addon\lkngatewaypreferences\App\Preferences\Services\PreferencesService;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\AutoCancel;
 use WHMCS\Module\Addon\lkngatewaypreferences\Helpers\Client;
@@ -409,4 +410,64 @@ add_hook('DailyCronJob', 1, function ($vars): void {
             AutoCancel::cancelOrder($orderData->id);
         }
     }
+});
+
+/**
+ * Rejects a checkout whose posted gateway is not allowed for the client/country.
+ *
+ * Priority follows the module service: client preference, then country
+ * preference, then the global preference.
+ *
+ * @since 1.7.0
+ */
+add_hook('ShoppingCartValidateCheckout', 1, function ($vars): array {
+    $posted = isset($_POST['paymentmethod']) ? (string) $_POST['paymentmethod'] : '';
+
+    if ($posted === '') {
+        return [];
+    }
+
+    $currentUser = new CurrentUser();
+    $clientId = (int) $currentUser->client()->id;
+
+    try {
+        if ($clientId > 0) {
+            $allowed = PreferencesService::getAllowed($clientId);
+        } else {
+            $country = '';
+
+            if (!empty($_SESSION['cart']['user']['country'])) {
+                $country = (string) $_SESSION['cart']['user']['country'];
+            } elseif (!empty($_POST['country'])) {
+                $country = (string) $_POST['country'];
+            }
+
+            $country = strtoupper(trim($country));
+
+            if (!preg_match('/^[A-Z]{2}$/', $country)) {
+                return [];
+            }
+
+            $repository = new PrefByCountryRepository();
+            $allowed = $repository->getOne($country);
+
+            if (!is_array($allowed) || count($allowed) === 0) {
+                $allowed = $repository->getGlobalPref();
+            }
+        }
+    } catch (\Throwable $e) {
+        Logger::log('checkout gateway validation failed', ['error' => $e->getMessage()]);
+
+        return [];
+    }
+
+    if (!is_array($allowed) || count($allowed) === 0) {
+        return [];
+    }
+
+    if (!in_array($posted, array_map('strval', $allowed), true)) {
+        return [Lang::text('Payment method unavailable for the selected country.')];
+    }
+
+    return [];
 });
